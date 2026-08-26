@@ -71,6 +71,17 @@ describe("finding.reanchor", function()
 		assert.is_truthy(item.line_text:find("v1-two", 1, true))
 	end)
 
+	it("stores the number of lines covered by a block finding", function()
+		local hunk, lnum = locate(session, "v1-two")
+		local item = session:add_finding(hunk, lnum, {
+			body = "check this block",
+			severity = "blocking",
+			span = 3,
+		})
+
+		assert.equals(3, item.span)
+	end)
+
 	it("refuses to attach to a line outside any hunk", function()
 		local hunk = session.order[1].hunk
 		assert.is_nil(session:add_finding(hunk, 9999, { body = "x", severity = "nit" }))
@@ -206,8 +217,15 @@ describe("findings", function()
 	end)
 
 	it("finds what sits on a line", function()
-		local item = add("v1-two", "here", "blocking")
+		local hunk, lnum = locate(session, "v1-two")
+		local item = session:add_finding(hunk, lnum, {
+			body = "here",
+			severity = "blocking",
+			span = 3,
+		})
 		assert.equals(1, #session:findings_at("auth/token.go", item.lnum))
+		assert.equals(1, #session:findings_at("auth/token.go", item.lnum + 2))
+		assert.equals(0, #session:findings_at("auth/token.go", item.lnum + 3))
 		assert.equals(0, #session:findings_at("auth/token.go", item.lnum + 500))
 	end)
 
@@ -297,6 +315,18 @@ describe("export", function()
 		assert.is_truthy(text:match("### auth/token%.go:%d+"))
 		assert.is_truthy(text:match("```go"))
 		assert.is_truthy(text:match("Do not change anything else"))
+	end)
+
+	it("includes the full source range for a block finding", function()
+		local hunk, lnum = locate(session, "v1-two")
+		session:add_finding(hunk, lnum, {
+			body = "Review the complete block.",
+			severity = "blocking",
+			span = 3,
+		})
+
+		local text = export.prompt(session)
+		assert.is_truthy(text:find(("auth/token.go:%d-%d"):format(lnum, lnum + 2), 1, true))
 	end)
 
 	it("leaves resolved findings out by default", function()

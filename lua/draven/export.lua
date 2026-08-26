@@ -101,10 +101,17 @@ function M.prompt(session, opts)
 			for _, item in ipairs(group) do
 				put("")
 
-				local where = item.lnum and ("%s:%d"):format(item.path, item.lnum)
-					or ("%s (line unknown — the code it referred to has changed)"):format(
+				local where
+				if item.lnum then
+					local span = math.max(1, item.span or 1)
+					where = span > 1
+							and ("%s:%d-%d"):format(item.path, item.lnum, item.lnum + span - 1)
+						or ("%s:%d"):format(item.path, item.lnum)
+				else
+					where = ("%s (line unknown — the code it referred to has changed)"):format(
 						item.path
 					)
+				end
 				put(("### %s"):format(where))
 
 				if opts.include_excerpt then

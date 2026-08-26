@@ -55,13 +55,14 @@ describe("render", function()
 		return bufnr, file
 	end
 
-	local function add_finding(file, body, severity)
+	local function add_finding(file, body, severity, span)
 		for _, hunk in ipairs(file.hunks) do
 			for _, line in ipairs(hunk.lines) do
 				if line.new_lnum and line.text:find("CHANGED", 1, true) then
 					return session:add_finding(hunk, line.new_lnum, {
 						body = body,
 						severity = severity or "blocking",
+						span = span,
 					})
 				end
 			end
@@ -198,6 +199,27 @@ describe("render", function()
 		assert.equals(1, #marks[1].virt_lines)
 		assert.is_truthy(virtual_text(marks[1].virt_lines):find("▸", 1, true))
 		assert.not_equals(true, marks[1].virt_lines_above)
+	end)
+
+	it("underlines every line covered by a block finding", function()
+		local bufnr, file = open("auth/token.go")
+		local item = add_finding(file, "Review this whole block", "blocking", 3)
+
+		render.render(bufnr, file, session, { width = 60 })
+
+		local underline
+		for _, mark in
+			ipairs(vim.api.nvim_buf_get_extmarks(bufnr, render.ns, 0, -1, { details = true }))
+		do
+			if mark[4].hl_group == "DravenFindingBlockingLine" then
+				underline = mark
+				break
+			end
+		end
+
+		assert.is_not_nil(underline)
+		assert.equals(item.lnum - 1, underline[2])
+		assert.equals(item.lnum + 1, underline[4].end_row)
 	end)
 
 	it("expands findings into a distinct wrapped body without losing text", function()
@@ -599,6 +621,70 @@ describe("review surface", function()
 		vim.wait(200)
 
 		assert.is_false(has_map(), "the review must unmap them again on close")
+	end)
+
+	it("maps comments in visual mode and removes the mapping on close", function()
+		local lhs = "<F6>"
+		config.setup({ keymaps = { comment = lhs } })
+
+		open_review()
+		local _, view_buf = windows()
+
+		local function has_visual_map()
+			for _, mapping in ipairs(vim.api.nvim_buf_get_keymap(view_buf, "x")) do
+				if mapping.lhs == lhs then
+					return true
+				end
+			end
+			return false
+		end
+
+		assert.is_true(has_visual_map())
+		ui.close()
+		vim.wait(200)
+		assert.is_false(has_visual_map())
+	end)
+
+	it("creates one finding for the complete visual selection", function()
+		local lhs = "<F6>"
+		config.setup({ keymaps = { comment = lhs } })
+		open_review()
+		local _, view_buf, view_win = windows()
+
+		local first
+		for lnum, line in ipairs(vim.api.nvim_buf_get_lines(view_buf, 0, -1, false)) do
+			if line:find("CHANGED", 1, true) then
+				first = lnum
+				break
+			end
+		end
+		assert.is_not_nil(first)
+
+		vim.api.nvim_set_current_win(view_win)
+		vim.api.nvim_win_set_cursor(view_win, { first, 0 })
+		vim.cmd("normal! Vj")
+		vim.api.nvim_feedkeys(vim.keycode(lhs), "mx", false)
+
+		helpers.wait_for(function()
+			return vim.api.nvim_buf_get_name(0) == "draven://finding"
+		end, "the block finding composer to open")
+		vim.cmd("stopinsert")
+		vim.api.nvim_buf_set_lines(0, 0, -1, false, { "Review both selected lines" })
+		vim.cmd("write")
+
+		local underline
+		for _, mark in
+			ipairs(vim.api.nvim_buf_get_extmarks(view_buf, render.ns, 0, -1, { details = true }))
+		do
+			if mark[4].hl_group == "DravenFindingBlockingLine" then
+				underline = mark
+				break
+			end
+		end
+
+		assert.is_not_nil(underline)
+		assert.equals(first - 1, underline[2])
+		assert.equals(first, underline[4].end_row)
 	end)
 
 	it("never maps <CR> into a real file buffer", function()

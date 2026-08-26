@@ -465,9 +465,10 @@ local function render_findings(bufnr, file, session, width)
 		end
 
 		if primary then
-			local text = vim.api.nvim_buf_get_lines(bufnr, lnum - 1, lnum, false)[1] or ""
+			local last = math.min(total, lnum + math.max(1, primary.span or 1) - 1)
+			local text = vim.api.nvim_buf_get_lines(bufnr, last - 1, last, false)[1] or ""
 			pcall(vim.api.nvim_buf_set_extmark, bufnr, M.ns, lnum - 1, 0, {
-				end_row = lnum - 1,
+				end_row = last - 1,
 				end_col = #text,
 				hl_group = finding_underline(primary),
 				priority = 200,

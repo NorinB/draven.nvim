@@ -32,7 +32,7 @@ local apply_panel_window_options
 
 ---@class draven.Action
 ---@field desc string
----@field fn fun()
+---@field fn fun(first_lnum?: integer, last_lnum?: integer)
 
 ---@type table<string, draven.Action>
 local actions = {}
@@ -47,6 +47,18 @@ local PANEL_ONLY = {
 	collapse_all = true,
 	expand_all = true,
 }
+
+---The line range selected by the active visual-mode mapping. Characterwise
+---and blockwise selections are deliberately treated as whole lines: findings
+---are line-addressed, so retaining columns would promise precision the model
+---cannot preserve after a rewrite.
+---@return integer first_lnum
+---@return integer last_lnum
+local function visual_line_range()
+	local anchor = vim.fn.getpos("v")[2]
+	local cursor = vim.api.nvim_win_get_cursor(0)[1]
+	return math.min(anchor, cursor), math.max(anchor, cursor)
+end
 
 ---@param bufnr integer
 ---@param opts? { panel?: boolean }
@@ -65,6 +77,20 @@ local function attach_keymaps(bufnr, opts)
 				nowait = true,
 				silent = true,
 			})
+
+			if name == "comment" and not is_panel then
+				vim.keymap.set("x", lhs, function()
+					local first, last = visual_line_range()
+					-- Leave visual mode before the composer takes focus.
+					vim.cmd("normal! \27")
+					action.fn(first, last)
+				end, {
+					buffer = bufnr,
+					desc = "[R]eview [C]omment on selection",
+					nowait = true,
+					silent = true,
+				})
+			end
 		end
 	end
 end
@@ -75,9 +101,12 @@ local function detach_keymaps(bufnr)
 		return
 	end
 
-	for _, lhs in pairs(config.options.keymaps) do
+	for name, lhs in pairs(config.options.keymaps) do
 		if lhs then
 			pcall(vim.keymap.del, "n", lhs, { buffer = bufnr })
+			if name == "comment" then
+				pcall(vim.keymap.del, "x", lhs, { buffer = bufnr })
+			end
 		end
 	end
 end
@@ -306,7 +335,12 @@ local function finding_at_cursor()
 	local total = vim.api.nvim_buf_line_count(active.view.bufnr)
 	local items = {}
 	for _, item in ipairs(active.session:findings({ path = active.view.file.path })) do
-		if finding_mod.display_lnum(item, total) == lnum then
+		local first = finding_mod.display_lnum(item, total)
+		-- An orphan is displayed at its last known first line, but the rest of
+		-- its former range is no longer trustworthy.
+		local span = item.lnum and math.max(1, item.span or 1) or 1
+		local last = first and math.min(total, first + span - 1)
+		if first and lnum >= first and lnum <= last then
 			items[#items + 1] = item
 		end
 	end
@@ -323,10 +357,14 @@ end
 ---@param existing draven.Finding
 local function edit_finding(existing)
 	local comment = require("draven.ui.comment")
+	local first = existing.lnum or existing.last_lnum or 0
+	local span = existing.lnum and math.max(1, existing.span or 1) or 1
+	local location = span > 1 and ("%d-%d"):format(first, first + span - 1)
+		or tostring(first)
 	comment.open({
-		title = ("%s:%d%s"):format(
+		title = ("%s:%s%s"):format(
 			existing.path,
-			existing.lnum or existing.last_lnum or 0,
+			location,
 			existing.state == "orphaned" and " · orphaned" or ""
 		),
 		body = existing.body,
@@ -342,16 +380,23 @@ local function edit_finding(existing)
 	})
 end
 
----Write a finding against the line under the cursor, or edit the one there.
-function M.comment()
+---Write a finding against the line under the cursor or a selected line range.
+---Normal-mode comments edit an existing finding under the cursor. A visual
+---selection always creates a finding for the selected block.
+---@param first_lnum? integer
+---@param last_lnum? integer
+function M.comment(first_lnum, last_lnum)
 	if not active then
 		return
 	end
 
-	local existing = finding_at_cursor()
-	if existing then
-		edit_finding(existing)
-		return
+	local is_range = first_lnum ~= nil and last_lnum ~= nil
+	if not is_range then
+		local existing = finding_at_cursor()
+		if existing then
+			edit_finding(existing)
+			return
+		end
 	end
 
 	if vim.api.nvim_get_current_win() ~= active.view_win then
@@ -365,21 +410,35 @@ function M.comment()
 
 	local comment = require("draven.ui.comment")
 
-	local lnum = vim.api.nvim_win_get_cursor(active.view_win)[1]
+	local lnum = is_range and math.min(first_lnum, last_lnum)
+		or vim.api.nvim_win_get_cursor(active.view_win)[1]
+	local last = is_range and math.max(first_lnum, last_lnum) or lnum
 	local hunk = active.session:hunk_at(file, lnum)
+	local last_hunk = active.session:hunk_at(file, last)
 
-	if not hunk then
+	if not hunk or not last_hunk then
 		log.info("findings attach to changed lines — move to a hunk first")
 		return
 	end
+	if hunk.id ~= last_hunk.id then
+		log.info("block findings must stay within a single hunk")
+		return
+	end
+
+	local span = last - lnum + 1
+	local location = span > 1 and ("%d-%d"):format(lnum, last) or tostring(lnum)
 
 	comment.open({
-		title = ("%s:%d"):format(file.path, lnum),
+		title = ("%s:%s"):format(file.path, location),
 		on_submit = function(body, severity)
 			if not active then
 				return
 			end
-			active.session:add_finding(hunk, lnum, { body = body, severity = severity })
+			active.session:add_finding(hunk, lnum, {
+				body = body,
+				severity = severity,
+				span = span,
+			})
 			active.view:redraw()
 			repaint_panel()
 		end,
@@ -904,7 +963,7 @@ actions = {
 		fn = M.show_delta,
 	},
 	comment = {
-		desc = "[R]eview [C]omment on this line",
+		desc = "[R]eview [C]omment on this line or selection",
 		fn = M.comment,
 	},
 	list_findings = {

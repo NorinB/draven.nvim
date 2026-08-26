@@ -269,7 +269,9 @@ end
 function Session:findings_at(path, lnum)
 	local out = {}
 	for _, item in ipairs(self._findings_by_path[path] or {}) do
-		if item.lnum == lnum then
+		local first = item.lnum
+		local last = first and first + math.max(1, item.span or 1) - 1
+		if first and lnum >= first and lnum <= last then
 			out[#out + 1] = item
 		end
 	end

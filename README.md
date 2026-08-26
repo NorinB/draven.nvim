@@ -99,7 +99,7 @@ These are all buffer-local to the review:
 | `<leader>rn` | `next_hunk` | jump to the next unread hunk, across files |
 | `<leader>rp` | `prev_hunk` | jump to the previous unread hunk, across files |
 | `<leader>rd` | `delta` | show what changed in a stale hunk since you approved it |
-| `<leader>rc` | `comment` | write a finding on this line, or edit the one here |
+| `<leader>rc` | `comment` | write a finding on this line or a visual selection; edit the one here |
 | `<leader>rt` | `toggle_resolved` | toggle the finding resolved |
 | `<leader>rv` | `toggle_finding` | expand or collapse the finding body |
 | `<leader>rX` | `delete_finding` | delete the finding under the cursor |
@@ -169,8 +169,10 @@ cursor-scrolled when they exceed the window. Their summary points to
 
 ### Findings
 
-`<leader>rc` opens a scratch buffer in a float. It is just text, so your insert
-mappings, abbreviations and undo all work in it. `<Tab>` cycles through the
+`<leader>rc` opens a scratch buffer in a float. In normal mode it comments on
+the current line; in visual mode it comments on the entire selected line range.
+The selection must stay within one diff hunk. The composer is just text, so your
+insert mappings, abbreviations and undo all work in it. `<Tab>` cycles through the
 severities, `<C-s>` or `:w` saves, and `<Esc>` throws it away.
 
 Findings are rendered below the line they point at. New findings start as a

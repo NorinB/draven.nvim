@@ -156,7 +156,8 @@ closes. Set any of them to `false` in your config to skip it
 			See |draven-states|.
 
 	<leader>rc	Write a finding on this line, or edit the one already
-			there. See |draven-findings|.
+			there. In Visual mode, write one finding covering the
+			selected lines. See |draven-findings|.
 	<leader>rt	Toggle the finding under the cursor resolved.
 	<leader>rv	Expand or collapse the finding under the cursor.
 	<leader>rX	Delete the finding under the cursor.
@@ -231,16 +232,21 @@ the ability to say that one hunk is a rewrite of another.
 ==============================================================================
 7. FINDINGS                                                  *draven-findings*
 
-`<leader>rc` opens a scratch buffer in a float. It is just text, so your
-insert mappings, abbreviations and undo all work.
+`<leader>rc` opens a scratch buffer in a float. In Normal mode the finding
+covers the current line. In Visual mode it covers the complete selected line
+range; characterwise and blockwise selections are treated as whole lines. A
+selection must stay inside one diff hunk.
+
+The composer is just text, so your insert mappings, abbreviations and undo all
+work.
 
 	<Tab>		Cycle severity: blocking → question → nit.
 	<C-s>  ZZ  :w	Save.
 	<Esc>  q	Discard.
 
-Saved findings appear below the line they point at and are counted in the
-panel. New findings start as a compact one-line summary. `<leader>rv` expands
-one into a distinct header and wrapped body.
+Saved findings appear below the first line they cover and underline their full
+range. They are counted in the panel. New findings start as a compact one-line
+summary. `<leader>rv` expands one into a distinct header and wrapped body.
 
 Orphaned findings remain under an `orphaned findings` heading in the panel,
 even when their file has left the changeset. Press `<CR>` there to view or
