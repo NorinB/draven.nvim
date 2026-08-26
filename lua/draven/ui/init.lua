@@ -359,8 +359,7 @@ local function edit_finding(existing)
 	local comment = require("draven.ui.comment")
 	local first = existing.lnum or existing.last_lnum or 0
 	local span = existing.lnum and math.max(1, existing.span or 1) or 1
-	local location = span > 1 and ("%d-%d"):format(first, first + span - 1)
-		or tostring(first)
+	local location = span > 1 and ("%d-%d"):format(first, first + span - 1) or tostring(first)
 	comment.open({
 		title = ("%s:%s%s"):format(
 			existing.path,
