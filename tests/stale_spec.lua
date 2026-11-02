@@ -49,6 +49,36 @@ describe("stale detection", function()
 		assert.equals(3, #session.order, "regions should not merge into one hunk")
 	end)
 
+	it("walks from unchanged code without skipping the nearest hunk", function()
+		local file = session.order[1].file
+		local between = session.order[2].hunk.new_start - 1
+		local tail = #source("", "", "")
+
+		local function unread_from(lnum, backwards)
+			return session:next_unread(session:walk_origin(file, lnum, backwards), backwards)
+		end
+
+		assert.is_nil(session:hunk_at(file, between))
+		assert.is_nil(session:hunk_at(file, tail))
+
+		assert.equals(2, unread_from(between, false).position)
+		assert.equals(1, unread_from(between, true).position)
+		assert.equals(1, unread_from(tail, false).position)
+		assert.equals(3, unread_from(tail, true).position)
+	end)
+
+	it("walks to the nearest stale hunk from unchanged code", function()
+		session:mark_all(true)
+		repo:write("auth/token.go", source("v2-one", "v2-two", "v1-three"))
+		session:update(helpers.build(repo))
+
+		local file = session.order[1].file
+		local between = session.order[2].hunk.new_start - 1
+		local from = session:walk_origin(file, between, false)
+
+		assert.equals(2, session:next_stale(from, false).position)
+	end)
+
 	it("marks everything reviewed", function()
 		session:mark_all(true)
 

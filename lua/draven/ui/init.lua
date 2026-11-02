@@ -225,6 +225,19 @@ local function current_file()
 	return active.view.file
 end
 
+---Where a walk through the hunks starts: the diff cursor, or the top of the
+---changeset from anywhere else.
+---@param backwards? boolean
+---@return integer|nil
+local function walk_origin(backwards)
+	if not active.view.file or vim.api.nvim_get_current_win() ~= active.view_win then
+		return nil
+	end
+
+	local lnum = vim.api.nvim_win_get_cursor(active.view_win)[1]
+	return active.session:walk_origin(active.view.file, lnum, backwards)
+end
+
 --- Actions -------------------------------------------------------------------
 
 ---@param backwards? boolean
@@ -233,15 +246,7 @@ function M.goto_next_unread(backwards)
 		return
 	end
 
-	local from
-	if active.view.file and vim.api.nvim_get_current_win() == active.view_win then
-		local hunk = active.view:hunk_at_cursor()
-		if hunk then
-			from = active.session:position_of(hunk)
-		end
-	end
-
-	local entry = active.session:next_unread(from, backwards)
+	local entry = active.session:next_unread(walk_origin(backwards), backwards)
 	if not entry then
 		log.info("nothing left to read")
 		return
@@ -563,15 +568,7 @@ function M.goto_next_stale(backwards)
 		return
 	end
 
-	local from
-	if active.view.file and vim.api.nvim_get_current_win() == active.view_win then
-		local hunk = active.view:hunk_at_cursor()
-		if hunk then
-			from = active.session:position_of(hunk)
-		end
-	end
-
-	local entry = active.session:next_stale(from, backwards)
+	local entry = active.session:next_stale(walk_origin(backwards), backwards)
 	if not entry then
 		log.info("nothing has changed since you read it")
 		return

@@ -583,9 +583,31 @@ function Session:next_stale(from, backwards)
 	return nil
 end
 
+---Where a walk from `lnum` of `file` should start. Walks step off their start
+---before looking, so from unchanged code this sits one short of the nearest
+---hunk ahead, which a cursor between two hunks must not skip.
+---@param file draven.File
+---@param lnum integer
+---@param backwards? boolean
+---@return integer|nil
+function Session:walk_origin(file, lnum, backwards)
+	local here = self:hunk_at(file, lnum)
+	if here then
+		return self:position_of(here)
+	end
+
+	local ahead = self:nearest_hunk(file, lnum, backwards)
+	local position = ahead and self:position_of(ahead)
+	if position then
+		return position + (backwards and 1 or -1)
+	end
+
+	local behind = self:nearest_hunk(file, lnum, not backwards)
+	return behind and self:position_of(behind)
+end
+
 ---The hunk after or before `lnum` of `file`, whatever its state, wrapping
----around the changeset. From unchanged code the nearest hunk that way is the
----answer, so a cursor between two hunks never skips one.
+---around the changeset.
 ---@param file draven.File
 ---@param lnum integer
 ---@param backwards? boolean
@@ -596,15 +618,7 @@ function Session:adjacent_hunk(file, lnum, backwards)
 		return nil
 	end
 
-	local here = self:hunk_at(file, lnum)
-	local ahead = not here and self:nearest_hunk(file, lnum, backwards)
-	local position = ahead and self:position_of(ahead)
-	if position then
-		return self.order[position]
-	end
-
-	local behind = here or self:nearest_hunk(file, lnum, not backwards)
-	local from = behind and self:position_of(behind) or (backwards and 1 or count)
+	local from = self:walk_origin(file, lnum, backwards) or (backwards and count + 1 or 0)
 	return self.order[(from - 1 + (backwards and -1 or 1)) % count + 1]
 end
 
