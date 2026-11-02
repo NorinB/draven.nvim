@@ -718,6 +718,25 @@ describe("review surface", function()
 		assert.equals(second_stop, vim.api.nvim_win_get_cursor(view_win)[1])
 	end)
 
+	it("does not skip the nearest unread hunk from unchanged code", function()
+		open_review()
+		local _, _, view_win = windows()
+		vim.api.nvim_set_current_win(view_win)
+
+		vim.api.nvim_win_set_cursor(view_win, { 1, 0 })
+		ui.goto_adjacent_hunk(false)
+		local first_stop = vim.api.nvim_win_get_cursor(view_win)[1]
+
+		ui.goto_adjacent_hunk(false)
+		local second_stop = vim.api.nvim_win_get_cursor(view_win)[1]
+
+		vim.api.nvim_win_set_cursor(view_win, { second_stop - 1, 0 })
+		assert.is_true(second_stop - 1 > first_stop)
+
+		ui.goto_next_unread(false)
+		assert.equals(second_stop, vim.api.nvim_win_get_cursor(view_win)[1])
+	end)
+
 	it("carries on from the diff window when pressed in the panel", function()
 		open_review()
 		local _, _, view_win = windows()
