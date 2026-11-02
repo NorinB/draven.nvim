@@ -126,6 +126,25 @@ describe("session", function()
 		assert.equals(total, reviewed)
 	end)
 
+	it("steps onto reviewed hunks and wraps around", function()
+		session:mark_all(true)
+
+		local first = session.order[1]
+		local last = session.order[#session.order]
+		local first_lnum = first.hunk.new_start
+
+		assert.equals(2, session:adjacent_hunk(first.file, first_lnum, false).position)
+		assert.equals(#session.order, session:adjacent_hunk(first.file, first_lnum, true).position)
+		assert.equals(1, session:adjacent_hunk(last.file, last.hunk.new_start, false).position)
+	end)
+
+	it("returns nothing to step to in an empty review", function()
+		local file = session.order[1].file
+		session.order = {}
+
+		assert.is_nil(session:adjacent_hunk(file, 1, false))
+	end)
+
 	it("finds the hunk covering a line", function()
 		local entry = session.order[1]
 		local hunk_mod = require("draven.core.hunk")

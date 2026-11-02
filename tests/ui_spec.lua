@@ -667,6 +667,72 @@ describe("review surface", function()
 		assert.is_truthy(progress():match("1/%d+"), "expected one hunk marked, got: " .. progress())
 	end)
 
+	it("steps through hunks whether or not they have been read", function()
+		open_review()
+		local _, _, view_win = windows()
+		vim.api.nvim_set_current_win(view_win)
+
+		ui.mark_all(true)
+		vim.wait(100)
+
+		local function cursor_file()
+			return vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(view_win))
+		end
+
+		vim.api.nvim_win_set_cursor(view_win, { 1, 0 })
+		local start = cursor_file()
+
+		ui.goto_adjacent_hunk(false)
+		local first_stop = vim.api.nvim_win_get_cursor(view_win)[1]
+		assert.is_true(first_stop > 1, "expected to land on the first hunk")
+
+		ui.goto_adjacent_hunk(false)
+		assert.is_true(vim.api.nvim_win_get_cursor(view_win)[1] > first_stop)
+
+		ui.goto_adjacent_hunk(true)
+		assert.equals(first_stop, vim.api.nvim_win_get_cursor(view_win)[1])
+
+		ui.goto_adjacent_hunk(true)
+		helpers.wait_for(function()
+			return cursor_file() ~= start
+		end, "the wrap to the last file")
+	end)
+
+	it("does not skip the nearest hunk from unchanged code", function()
+		open_review()
+		local _, _, view_win = windows()
+		vim.api.nvim_set_current_win(view_win)
+
+		vim.api.nvim_win_set_cursor(view_win, { 1, 0 })
+		ui.goto_adjacent_hunk(false)
+		local first_stop = vim.api.nvim_win_get_cursor(view_win)[1]
+
+		ui.goto_adjacent_hunk(false)
+		local second_stop = vim.api.nvim_win_get_cursor(view_win)[1]
+
+		local between = second_stop - 1
+		assert.is_true(between > first_stop)
+		vim.api.nvim_win_set_cursor(view_win, { between, 0 })
+
+		ui.goto_adjacent_hunk(false)
+		assert.equals(second_stop, vim.api.nvim_win_get_cursor(view_win)[1])
+	end)
+
+	it("carries on from the diff window when pressed in the panel", function()
+		open_review()
+		local _, _, view_win = windows()
+
+		vim.api.nvim_win_set_cursor(view_win, { 1, 0 })
+		ui.goto_adjacent_hunk(false)
+		local first_stop = vim.api.nvim_win_get_cursor(view_win)[1]
+
+		ui.focus_panel()
+		ui.goto_adjacent_hunk(false)
+
+		assert.is_true(vim.api.nvim_win_get_cursor(view_win)[1] > first_stop)
+		assert.equals(view_win, vim.api.nvim_get_current_win())
+	end)
+
 	it("marks a whole file from the panel", function()
 		open_review()
 		local panel_buf = windows()

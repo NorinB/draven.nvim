@@ -250,6 +250,23 @@ function M.goto_next_unread(backwards)
 	goto_entry(entry)
 end
 
+---Step through every hunk, read or not, from wherever the diff window is.
+---@param backwards? boolean
+function M.goto_adjacent_hunk(backwards)
+	if not active or not active.view.file or not vim.api.nvim_win_is_valid(active.view_win) then
+		return
+	end
+
+	local lnum = vim.api.nvim_win_get_cursor(active.view_win)[1]
+	local entry = active.session:adjacent_hunk(active.view.file, lnum, backwards)
+	if not entry then
+		log.info("no hunks in this review")
+		return
+	end
+
+	goto_entry(entry)
+end
+
 ---@param reviewed boolean
 function M.mark_hunk(reviewed)
 	if not active then
@@ -955,6 +972,18 @@ actions = {
 		desc = "[R]eview [P]revious unread hunk",
 		fn = function()
 			M.goto_next_unread(true)
+		end,
+	},
+	next_any_hunk = {
+		desc = "[R]eview [N]ext hunk, read or not",
+		fn = function()
+			M.goto_adjacent_hunk(false)
+		end,
+	},
+	prev_any_hunk = {
+		desc = "[R]eview [P]revious hunk, read or not",
+		fn = function()
+			M.goto_adjacent_hunk(true)
 		end,
 	},
 	delta = {
