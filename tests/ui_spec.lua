@@ -917,6 +917,49 @@ describe("review surface", function()
 		assert.is_truthy(text:match("1/%d+"), "the mark should have survived: " .. text)
 	end)
 
+	describe("sending findings", function()
+		local sent
+
+		before_each(function()
+			sent = {}
+			package.loaded["sidekick.cli"] = {
+				send = function(opts)
+					sent[#sent + 1] = opts
+				end,
+			}
+		end)
+
+		after_each(function()
+			package.loaded["sidekick.cli"] = nil
+		end)
+
+		it("hands the review's findings to sidekick", function()
+			local session = session_mod.new(helpers.build(repo))
+			local entry = session.order[1]
+			session:add_finding(entry.hunk, entry.hunk.new_start, {
+				body = "Send me to the agent",
+				severity = "blocking",
+			})
+			session:save()
+
+			open_review()
+			ui.send_findings()
+
+			assert.equals(1, #sent)
+			local text = vim.tbl_map(function(line)
+				return line[1][1]
+			end, sent[1].text)
+			assert.is_truthy(table.concat(text, "\n"):find("Send me to the agent", 1, true))
+		end)
+
+		it("sends nothing when there are no findings", function()
+			open_review()
+			ui.send_findings()
+
+			assert.equals(0, #sent)
+		end)
+	end)
+
 	it("opens an orphan-only review and lets the panel view and delete it", function()
 		local session = session_mod.new(helpers.build(repo))
 		local entry = session.order[1]

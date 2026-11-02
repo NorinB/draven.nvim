@@ -15,6 +15,7 @@ describe("default keymaps", function()
 			prev_any_hunk = "<leader>rP",
 			prev_hunk = "<leader>rp",
 			refresh = "<leader>rR",
+			send_findings = "<leader>rs",
 			toggle_finding = "<leader>rv",
 			toggle_panel = "<leader>rw",
 			toggle_resolved = "<leader>rt",

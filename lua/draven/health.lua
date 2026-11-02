@@ -55,6 +55,12 @@ function M.check()
 	else
 		health.info("ignore rules are disabled")
 	end
+
+	if pcall(require, "sidekick.cli") then
+		health.ok("sidekick.nvim found — :DravenSend can reach your agent")
+	else
+		health.info("sidekick.nvim not found — :DravenSend needs it, :DravenExport does not")
+	end
 end
 
 return M

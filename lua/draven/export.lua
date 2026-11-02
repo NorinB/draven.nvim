@@ -193,4 +193,32 @@ function M.to_clipboard(text)
 	return ok
 end
 
+---Hand `text` to the agent attached through sidekick.nvim. This goes through
+---`text` rather than `msg` because sidekick expands `msg` as a template, and
+---the braces in a code excerpt would read as context variables.
+---@param text string
+---@return boolean sent false when sidekick.nvim is not installed
+function M.to_sidekick(text)
+	local ok, sidekick = pcall(require, "sidekick.cli")
+	if not ok then
+		return false
+	end
+
+	local lines = {}
+	for _, line in ipairs(vim.split(vim.trim(text), "\n", { plain = true })) do
+		lines[#lines + 1] = { { line } }
+	end
+
+	local submit = config.options.export.submit
+	sidekick.send({
+		filter = { installed = true },
+		text = lines,
+		submit = submit,
+		-- Left unsubmitted, the next thing you want is that prompt's Enter key.
+		focus = not submit,
+	})
+
+	return true
+end
+
 return M

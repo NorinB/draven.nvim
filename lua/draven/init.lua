@@ -142,6 +142,11 @@ function M.export()
 	require("draven.ui").export()
 end
 
+---Send the open review's findings to the agent attached through sidekick.nvim.
+function M.send()
+	require("draven.ui").send_findings()
+end
+
 ---Load the open review's findings into the quickfix list.
 function M.findings()
 	require("draven.ui").list_findings()

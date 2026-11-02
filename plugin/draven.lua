@@ -56,6 +56,10 @@ vim.api.nvim_create_user_command("DravenExport", function()
 	require("draven").export()
 end, { desc = "Copy the review's findings as a prompt for your agent" })
 
+vim.api.nvim_create_user_command("DravenSend", function()
+	require("draven").send()
+end, { desc = "Send the review's findings to your agent through sidekick.nvim" })
+
 vim.api.nvim_create_user_command("DravenFindings", function()
 	require("draven").findings()
 end, { desc = "Load the review's findings into the quickfix list" })
