@@ -22,6 +22,8 @@ goes stale.
 
 - Neovim 0.10+ (developed against 0.12)
 - git
+- [sidekick.nvim](https://github.com/folke/sidekick.nvim), optional, to send
+  findings straight to your agent
 
 ## Install
 
@@ -76,6 +78,7 @@ vim.keymap.set("n", "<leader>ro", "<cmd>Draven<cr>", { desc = "[R]eview [O]pen" 
 :DravenToggle            " open or close
 :DravenClose             " close and save state
 :DravenExport            " findings to the clipboard, as a prompt for the agent
+:DravenSend              " findings straight to your agent, through sidekick.nvim
 :DravenFindings          " findings into the quickfix list
 :DravenStatus!           " a per-file breakdown, without opening anything
 :DravenReset             " throw away this review's marks and findings
@@ -107,6 +110,7 @@ These are all buffer-local to the review:
 | `<leader>rX` | `delete_finding` | delete the finding under the cursor |
 | `<leader>rq` | `list_findings` | load all findings into the quickfix list |
 | `<leader>rx` | `export` | copy findings as a prompt for the agent |
+| `<leader>rs` | `send_findings` | send findings to the agent through sidekick.nvim |
 | `<leader>rR` | `refresh` | rebuild from git, keeping every mark |
 | `<leader>rw` | `toggle_panel` | hide the panel, or bring it back |
 | `<CR>` | `open_entry` | panel only: open a file, or fold a directory |
@@ -193,7 +197,12 @@ being quietly re-pointed at whatever moved into its place. Orphans remain in a
 dedicated panel section: `<CR>` views or edits one, and `<leader>rX` deletes it.
 
 `<leader>rx` (or `:DravenExport`) puts the lot on your clipboard as something
-you can paste straight into an agent:
+you can paste straight into an agent. With
+[sidekick.nvim](https://github.com/folke/sidekick.nvim) installed, `<leader>rs`
+(or `:DravenSend`) skips the paste and puts the same prompt in the input of
+your attached agent. If none is attached, sidekick asks which one to use. The
+prompt waits there for you to submit it, unless you set `export.submit = true`.
+This is the prompt:
 
 ````markdown
 Code review of working tree against HEAD.

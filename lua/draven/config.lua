@@ -152,6 +152,9 @@ local defaults = {
 		register = "+",
 		-- Resolved findings stay in the state file but leave the prompt.
 		unresolved_only = true,
+		-- Whether :DravenSend presses Enter for you. Off, the prompt waits in
+		-- the agent's input, because submitting sets it editing your code.
+		submit = false,
 	},
 
 	findings = {
@@ -172,6 +175,7 @@ local defaults = {
 		comment = "<leader>rc",
 		list_findings = "<leader>rq",
 		export = "<leader>rx",
+		send_findings = "<leader>rs",
 		toggle_resolved = "<leader>rt",
 		toggle_finding = "<leader>rv",
 		delete_finding = "<leader>rX",

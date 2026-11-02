@@ -546,6 +546,29 @@ function M.export()
 	end
 end
 
+---Send findings straight to the agent attached through sidekick.nvim.
+function M.send_findings()
+	if not active then
+		return
+	end
+
+	local export = require("draven.export")
+	local text, count = export.prompt(active.session, {
+		unresolved_only = config.options.export.unresolved_only,
+	})
+
+	if count == 0 then
+		log.info("no findings to send")
+		return
+	end
+
+	if export.to_sidekick(text) then
+		log.info(("%d finding%s handed to sidekick"):format(count, count == 1 and "" or "s"))
+	else
+		log.error("sidekick.nvim is not installed; use :DravenExport to copy the findings")
+	end
+end
+
 ---Show the delta between the approved version and what is there now.
 function M.show_delta()
 	if not active then
@@ -998,6 +1021,10 @@ actions = {
 	export = {
 		desc = "[R]eview e[X]port findings as an agent prompt",
 		fn = M.export,
+	},
+	send_findings = {
+		desc = "[R]eview [S]end findings to the agent",
+		fn = M.send_findings,
 	},
 	toggle_resolved = {
 		desc = "[R]eview [T]oggle finding resolved",

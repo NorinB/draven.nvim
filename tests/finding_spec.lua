@@ -378,4 +378,58 @@ describe("export", function()
 		assert.is_true(export.to_clipboard(text))
 		assert.is_truthy(vim.fn.getreg("z"):match("copy me"))
 	end)
+
+	describe("to sidekick", function()
+		local sent
+
+		before_each(function()
+			sent = {}
+			package.loaded["sidekick.cli"] = {
+				send = function(opts)
+					sent[#sent + 1] = opts
+				end,
+			}
+		end)
+
+		after_each(function()
+			package.loaded["sidekick.cli"] = nil
+		end)
+
+		it("sends the prompt as text, so sidekick does not expand it", function()
+			add("v1-one", "Replace {file} with { return 1 }", "blocking")
+
+			local text = export.prompt(session)
+			assert.is_true(export.to_sidekick(text))
+
+			assert.equals(1, #sent)
+			assert.is_nil(sent[1].msg)
+
+			local lines = vim.tbl_map(function(line)
+				return line[1][1]
+			end, sent[1].text)
+			assert.equals(vim.trim(text), table.concat(lines, "\n"))
+			assert.is_truthy(table.concat(lines, "\n"):find("{file} with { return 1 }", 1, true))
+		end)
+
+		it("leaves the prompt unsubmitted and focuses the agent by default", function()
+			assert.is_true(export.to_sidekick("hello"))
+
+			assert.is_false(sent[1].submit)
+			assert.is_true(sent[1].focus)
+		end)
+
+		it("submits and keeps your place when asked to", function()
+			config.setup({ export = { submit = true } })
+
+			assert.is_true(export.to_sidekick("hello"))
+
+			assert.is_true(sent[1].submit)
+			assert.is_false(sent[1].focus)
+		end)
+
+		it("reports when sidekick is not installed", function()
+			package.loaded["sidekick.cli"] = nil
+			assert.is_false(export.to_sidekick("hello"))
+		end)
+	end)
 end)

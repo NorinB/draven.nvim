@@ -123,6 +123,10 @@ buffer-local to the review, so unless you let lazy.nvim define one through
 :DravenExport	Copy findings to a register as a prompt for your agent.
 		See |draven-export|.
 
+                                                                 *:DravenSend*
+:DravenSend	Send findings to your agent through sidekick.nvim.
+		See |draven-export|.
+
                                                              *:DravenFindings*
 :DravenFindings	Load every finding into the |quickfix| list.
 
@@ -165,6 +169,7 @@ closes. Set any of them to `false` in your config to skip it
 	<leader>rX	Delete the finding under the cursor.
 	<leader>rq	Load findings into the |quickfix| list.
 	<leader>rx	Copy findings as a prompt for your agent.
+	<leader>rs	Send that prompt to your agent through sidekick.nvim.
 
 	<leader>rR	Rebuild from git, keeping every mark.
 	<leader>rw	Hide the panel, or bring it back. The changeset tree
@@ -281,6 +286,11 @@ to fix the blockers and treat the nits as optional.
 markdown built to be pasted straight into an agent: grouped by severity, each
 one carrying its file, line and a code excerpt.
 
+With sidekick.nvim installed, `<leader>rs` (or |:DravenSend|) skips the paste
+and puts the same prompt in the input of your attached agent. If none is
+attached, sidekick asks which one to use. The prompt waits there for you to
+submit it. Set `export.submit = true` to submit it straight away.
+
 Resolved findings stay in the state file but drop out of the prompt. Set
 `export.unresolved_only = false` to include them.
 
@@ -324,7 +334,7 @@ Defaults shown. Pass any subset to `require("draven").setup()`. >lua
 	    fold_context = 6,
 	  },
 
-	  export = { register = "+", unresolved_only = true },
+	  export = { register = "+", unresolved_only = true, submit = false },
 	  findings = { default_severity = "blocking" },
 
 	  keymaps = { ... },          -- see |draven-mappings|
@@ -469,10 +479,12 @@ draven.lines({cs})
 		A one-line summary, and a line per file.
 
                                                              *draven.export()*
+                                                               *draven.send()*
                                                            *draven.findings()*
 draven.export()
+draven.send()
 draven.findings()
-		Back |:DravenExport| and |:DravenFindings|.
+		Back |:DravenExport|, |:DravenSend| and |:DravenFindings|.
 
                                                               *draven.reset()*
 draven.reset({opts})
