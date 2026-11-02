@@ -583,6 +583,31 @@ function Session:next_stale(from, backwards)
 	return nil
 end
 
+---The hunk after or before `lnum` of `file`, whatever its state, wrapping
+---around the changeset. From unchanged code the nearest hunk that way is the
+---answer, so a cursor between two hunks never skips one.
+---@param file draven.File
+---@param lnum integer
+---@param backwards? boolean
+---@return draven.OrderEntry|nil
+function Session:adjacent_hunk(file, lnum, backwards)
+	local count = #self.order
+	if count == 0 then
+		return nil
+	end
+
+	local here = self:hunk_at(file, lnum)
+	local ahead = not here and self:nearest_hunk(file, lnum, backwards)
+	local position = ahead and self:position_of(ahead)
+	if position then
+		return self.order[position]
+	end
+
+	local behind = here or self:nearest_hunk(file, lnum, not backwards)
+	local from = behind and self:position_of(behind) or (backwards and 1 or count)
+	return self.order[(from - 1 + (backwards and -1 or 1)) % count + 1]
+end
+
 ---The first hunk of the changeset, unread ones preferred.
 ---@return draven.OrderEntry|nil
 function Session:first_target()

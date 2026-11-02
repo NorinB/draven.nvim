@@ -98,6 +98,8 @@ These are all buffer-local to the review:
 | `<leader>ru` | `unmark_hunk` | unmark the hunk |
 | `<leader>rn` | `next_hunk` | jump to the next unread hunk, across files |
 | `<leader>rp` | `prev_hunk` | jump to the previous unread hunk, across files |
+| `<leader>rN` | `next_any_hunk` | jump to the next hunk, read or not, across files |
+| `<leader>rP` | `prev_any_hunk` | jump to the previous hunk, read or not, across files |
 | `<leader>rd` | `delta` | show what changed in a stale hunk since you approved it |
 | `<leader>rc` | `comment` | write a finding on this line or a visual selection; edit the one here |
 | `<leader>rt` | `toggle_resolved` | toggle the finding resolved |
