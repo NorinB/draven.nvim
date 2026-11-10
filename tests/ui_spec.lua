@@ -475,9 +475,13 @@ describe("panel", function()
 		return vim.api.nvim_buf_get_lines(panel.bufnr, 0, -1, false)
 	end
 
+	local function header_lines()
+		return vim.api.nvim_buf_get_lines(panel.header_bufnr, 0, -1, false)
+	end
+
 	---The header line carrying the progress bar, whatever row it lands on.
 	local function progress_line()
-		for _, line in ipairs(lines()) do
+		for _, line in ipairs(header_lines()) do
 			if line:find("▰") or line:find("▱") then
 				return line
 			end
@@ -560,7 +564,7 @@ describe("panel", function()
 		config.setup({ ui = { panel = { width = 30 } } })
 		panel:render(session, nil)
 
-		for _, line in ipairs(lines()) do
+		for _, line in ipairs(vim.list_extend(header_lines(), lines())) do
 			assert.is_true(
 				vim.fn.strdisplaywidth(line) <= 30,
 				("line wider than the panel: %q"):format(line)
@@ -572,6 +576,20 @@ describe("panel", function()
 		assert.equals("nofile", vim.bo[panel.bufnr].buftype)
 		assert.equals("draven-panel", vim.bo[panel.bufnr].filetype)
 		assert.is_false(vim.bo[panel.bufnr].modifiable)
+		assert.equals("draven-panel-header", vim.bo[panel.header_bufnr].filetype)
+		assert.is_false(vim.bo[panel.header_bufnr].modifiable)
+	end)
+
+	it("keeps the header out of the file list", function()
+		panel:render(session, nil)
+
+		assert.is_truthy(progress_line():find("▱", 1, true))
+		assert.equals(#header_lines(), panel.header_height)
+		for lnum, line in ipairs(lines()) do
+			assert.is_falsy(line:find("▱", 1, true), "progress bar in the list")
+			assert.is_not_nil(panel:entry_at(lnum))
+		end
+		assert.equals("dir", panel:entry_at(1).kind)
 	end)
 end)
 
@@ -604,7 +622,7 @@ describe("review surface", function()
 		helpers.wait_for(function()
 			local wins = vim.api.nvim_tabpage_list_wins(vim.api.nvim_get_current_tabpage())
 			for _, w in ipairs(wins) do
-				if vim.bo[vim.api.nvim_win_get_buf(w)].filetype ~= "draven-panel" then
+				if not vim.bo[vim.api.nvim_win_get_buf(w)].filetype:match("^draven%-panel") then
 					return vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(w)) ~= ""
 				end
 			end
@@ -612,27 +630,75 @@ describe("review surface", function()
 		end, "the first file to load")
 	end
 
-	---@return integer panel_buf, integer view_buf, integer view_win
+	---@return integer panel_buf, integer view_buf, integer view_win, integer header_buf
 	local function windows()
-		local panel_buf, view_buf, view_win
+		local panel_buf, view_buf, view_win, header_buf
 		for _, w in ipairs(vim.api.nvim_tabpage_list_wins(vim.api.nvim_get_current_tabpage())) do
 			local b = vim.api.nvim_win_get_buf(w)
 			if vim.bo[b].filetype == "draven-panel" then
 				panel_buf = b
+			elseif vim.bo[b].filetype == "draven-panel-header" then
+				header_buf = b
 			else
 				view_buf, view_win = b, w
 			end
 		end
-		return panel_buf, view_buf, view_win
+		return panel_buf, view_buf, view_win, header_buf
 	end
 
 	it("opens a tab with a panel and a diff window", function()
 		open_review()
 
-		local panel_buf, view_buf = windows()
+		local panel_buf, view_buf, _, header_buf = windows()
 		assert.is_not_nil(panel_buf)
 		assert.is_not_nil(view_buf)
-		assert.equals(2, #vim.api.nvim_tabpage_list_wins(vim.api.nvim_get_current_tabpage()))
+		assert.is_not_nil(header_buf)
+		assert.equals(3, #vim.api.nvim_tabpage_list_wins(vim.api.nvim_get_current_tabpage()))
+	end)
+
+	---@param bufnr integer
+	---@return integer|nil
+	local function win_of(bufnr)
+		for _, w in ipairs(vim.api.nvim_tabpage_list_wins(vim.api.nvim_get_current_tabpage())) do
+			if vim.api.nvim_win_get_buf(w) == bufnr then
+				return w
+			end
+		end
+		return nil
+	end
+
+	it("pins the header above the panel at its own height", function()
+		open_review()
+		local panel_buf, _, _, header_buf = windows()
+		local panel_win, header_win = win_of(panel_buf), win_of(header_buf)
+
+		local header_pos = vim.api.nvim_win_get_position(header_win)
+		local panel_pos = vim.api.nvim_win_get_position(panel_win)
+		assert.equals(header_pos[2], panel_pos[2])
+		assert.is_true(header_pos[1] < panel_pos[1])
+		assert.equals(
+			#vim.api.nvim_buf_get_lines(header_buf, 0, -1, false),
+			vim.api.nvim_win_get_height(header_win)
+		)
+
+		ui.focus_panel()
+		vim.cmd("wincmd k")
+		assert.equals(panel_win, vim.api.nvim_get_current_win(), "the header never takes focus")
+	end)
+
+	it("hides and restores the header with the panel", function()
+		open_review()
+		local function count()
+			return #vim.api.nvim_tabpage_list_wins(vim.api.nvim_get_current_tabpage())
+		end
+
+		ui.toggle_panel()
+		assert.equals(1, count())
+
+		ui.toggle_panel()
+		assert.equals(3, count())
+		local _, _, _, header_buf = windows()
+		assert.is_not_nil(header_buf)
 	end)
 
 	it("shows the real file, not a copy of it", function()
@@ -647,10 +713,10 @@ describe("review surface", function()
 
 	it("marking a hunk updates the panel and moves on", function()
 		open_review()
-		local panel_buf, _, view_win = windows()
+		local _, _, view_win, header_buf = windows()
 
 		local function progress()
-			for _, line in ipairs(vim.api.nvim_buf_get_lines(panel_buf, 0, -1, false)) do
+			for _, line in ipairs(vim.api.nvim_buf_get_lines(header_buf, 0, -1, false)) do
 				if line:find("▰") or line:find("▱") then
 					return line
 				end
@@ -754,16 +820,13 @@ describe("review surface", function()
 
 	it("marks a whole file from the panel", function()
 		open_review()
-		local panel_buf = windows()
+		local _, _, _, header_buf = windows()
 
 		ui.focus_panel()
-		local panel = require("draven.ui.panel")
-		local _ = panel
-
 		ui.mark_all(true)
 		vim.wait(300)
 
-		local text = table.concat(vim.api.nvim_buf_get_lines(panel_buf, 0, -1, false), "\n")
+		local text = table.concat(vim.api.nvim_buf_get_lines(header_buf, 0, -1, false), "\n")
 		assert.is_truthy(text:match("100%%"), "got: " .. text)
 	end)
 
@@ -911,8 +974,8 @@ describe("review surface", function()
 		vim.wait(300)
 
 		open_review()
-		local panel_buf = windows()
-		local text = table.concat(vim.api.nvim_buf_get_lines(panel_buf, 0, -1, false), "\n")
+		local _, _, _, header_buf = windows()
+		local text = table.concat(vim.api.nvim_buf_get_lines(header_buf, 0, -1, false), "\n")
 
 		assert.is_truthy(text:match("1/%d+"), "the mark should have survived: " .. text)
 	end)

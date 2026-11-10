@@ -46,37 +46,81 @@ M.ns = vim.api.nvim_create_namespace("draven.panel")
 
 ---@class draven.Panel
 ---@field bufnr integer
+---@field header_bufnr integer
+---@field header_height integer
 ---@field entries table<integer, draven.PanelEntry>
 ---@field collapsed table<string, boolean>
 local Panel = {}
 Panel.__index = Panel
 
 M.BUFNAME = "draven://changeset"
+M.HEADER_BUFNAME = "draven://changeset-header"
 
 ---Buffer names must be unique, and a panel from an earlier review can outlive
 ---its window. Clear the name out of the way before claiming it.
-local function drop_stale_panel()
+---@param name string
+local function drop_stale(name)
 	for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
-		if vim.api.nvim_buf_is_valid(bufnr) and vim.api.nvim_buf_get_name(bufnr) == M.BUFNAME then
+		if vim.api.nvim_buf_is_valid(bufnr) and vim.api.nvim_buf_get_name(bufnr) == name then
 			pcall(vim.api.nvim_buf_delete, bufnr, { force = true })
 		end
 	end
 end
 
----@return draven.Panel
-function M.new()
-	drop_stale_panel()
+---@param name string
+---@param filetype string
+---@return integer
+local function scratch(name, filetype)
+	drop_stale(name)
 
 	local bufnr = vim.api.nvim_create_buf(false, true)
 
 	vim.bo[bufnr].buftype = "nofile"
 	vim.bo[bufnr].bufhidden = "hide"
 	vim.bo[bufnr].swapfile = false
-	vim.bo[bufnr].filetype = "draven-panel"
+	vim.bo[bufnr].filetype = filetype
 	vim.bo[bufnr].modifiable = false
-	pcall(vim.api.nvim_buf_set_name, bufnr, M.BUFNAME)
+	pcall(vim.api.nvim_buf_set_name, bufnr, name)
 
-	return setmetatable({ bufnr = bufnr, entries = {}, collapsed = {} }, Panel)
+	return bufnr
+end
+
+---The header lives in a buffer of its own so the review layout can pin it in
+---a window above the list, where scrolling never takes it away.
+---@return draven.Panel
+function M.new()
+	return setmetatable({
+		bufnr = scratch(M.BUFNAME, "draven-panel"),
+		header_bufnr = scratch(M.HEADER_BUFNAME, "draven-panel-header"),
+		header_height = 0,
+		entries = {},
+		collapsed = {},
+	}, Panel)
+end
+
+---@param bufnr integer
+---@param lines string[]
+---@param marks table[]
+local function commit(bufnr, lines, marks)
+	vim.bo[bufnr].modifiable = true
+	vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
+	vim.bo[bufnr].modifiable = false
+
+	vim.api.nvim_buf_clear_namespace(bufnr, M.ns, 0, -1)
+	for _, m in ipairs(marks) do
+		if m.line_hl then
+			vim.api.nvim_buf_set_extmark(bufnr, M.ns, m.lnum - 1, 0, {
+				line_hl_group = m.line_hl,
+				priority = 90,
+			})
+		elseif m.len > 0 then
+			pcall(vim.api.nvim_buf_set_extmark, bufnr, M.ns, m.lnum - 1, m.col, {
+				end_col = m.col + m.len,
+				hl_group = m.group,
+				priority = 100,
+			})
+		end
+	end
 end
 
 ---@param status "reviewed"|"partial"|"stale"|"unread"|"ignored"|"empty"
@@ -118,6 +162,7 @@ function Panel:render(session, active_path)
 	local cs = session.changeset
 
 	local lines, entries, marks = {}, {}, {}
+	local header_lines, header_marks = {}, {}
 
 	local function put(text, entry)
 		lines[#lines + 1] = text
@@ -127,6 +172,15 @@ function Panel:render(session, active_path)
 
 	local function mark(lnum, col, len, group)
 		marks[#marks + 1] = { lnum = lnum, col = col, len = len, group = group }
+	end
+
+	local function put_header(text)
+		header_lines[#header_lines + 1] = text
+		return #header_lines
+	end
+
+	local function mark_header(lnum, col, len, group)
+		header_marks[#header_marks + 1] = { lnum = lnum, col = col, len = len, group = group }
 	end
 
 	-- Header ------------------------------------------------------------
@@ -144,9 +198,9 @@ function Panel:render(session, active_path)
 	-- Name and scope share a line: the panel is narrow, and two lines of
 	-- chrome before any content is a line too many.
 	local head = (" draven  %s"):format(fit(scope, math.max(4, width - 10)))
-	local head_line = put(head, { kind = "chrome" })
-	mark(head_line, 1, 6, "DravenPanelTitle")
-	mark(head_line, 9, #head - 9, "DravenPanelBase")
+	local head_line = put_header(head)
+	mark_header(head_line, 1, 6, "DravenPanelTitle")
+	mark_header(head_line, 9, #head - 9, "DravenPanelBase")
 
 	local reviewed, total, stale = session:progress()
 	local percent = total > 0 and math.floor(reviewed / total * 100) or 100
@@ -154,12 +208,9 @@ function Panel:render(session, active_path)
 	local bar = progress_bar(reviewed, total, 12)
 	local tally = ("%d/%d"):format(reviewed, total)
 	local gap = math.max(1, width - 2 - vim.fn.strdisplaywidth(bar) - #tally - 5)
-	local bar_line = put(
-		(" %s%s%s %3d%%"):format(bar, string.rep(" ", gap), tally, percent),
-		{ kind = "chrome" }
-	)
-	mark(bar_line, 1, #bar, "DravenPanelProgress")
-	mark(bar_line, 1 + #bar + gap, #tally, "DravenPanelCount")
+	local bar_line = put_header((" %s%s%s %3d%%"):format(bar, string.rep(" ", gap), tally, percent))
+	mark_header(bar_line, 1, #bar, "DravenPanelProgress")
+	mark_header(bar_line, 1 + #bar + gap, #tally, "DravenPanelCount")
 
 	-- Badges for the two things that want acting on, side by side.
 	local badges, badge_marks = " ", {}
@@ -188,14 +239,11 @@ function Panel:render(session, active_path)
 		badges = badges .. text
 	end
 	if #badge_marks > 0 then
-		local lnum = put(badges:gsub("%s+$", ""), { kind = "chrome" })
+		local lnum = put_header((badges:gsub("%s+$", "")))
 		for _, b in ipairs(badge_marks) do
-			mark(lnum, b.col, b.len, b.group)
+			mark_header(lnum, b.col, b.len, b.group)
 		end
 	end
-
-	local rule = put(" " .. string.rep("─", math.max(1, width - 2)), { kind = "chrome" })
-	mark(rule, 1, width - 2, "DravenPanelRule")
 
 	-- Files ---------------------------------------------------------------
 	-- Knowing which file ends its directory is what lets the guides close.
@@ -319,26 +367,10 @@ function Panel:render(session, active_path)
 
 	-- Commit --------------------------------------------------------------
 	self.entries = entries
+	self.header_height = #header_lines
 
-	vim.bo[self.bufnr].modifiable = true
-	vim.api.nvim_buf_set_lines(self.bufnr, 0, -1, false, lines)
-	vim.bo[self.bufnr].modifiable = false
-
-	vim.api.nvim_buf_clear_namespace(self.bufnr, M.ns, 0, -1)
-	for _, m in ipairs(marks) do
-		if m.line_hl then
-			vim.api.nvim_buf_set_extmark(self.bufnr, M.ns, m.lnum - 1, 0, {
-				line_hl_group = m.line_hl,
-				priority = 90,
-			})
-		elseif m.len > 0 then
-			pcall(vim.api.nvim_buf_set_extmark, self.bufnr, M.ns, m.lnum - 1, m.col, {
-				end_col = m.col + m.len,
-				hl_group = m.group,
-				priority = 100,
-			})
-		end
-	end
+	commit(self.header_bufnr, header_lines, header_marks)
+	commit(self.bufnr, lines, marks)
 end
 
 ---@param lnum integer

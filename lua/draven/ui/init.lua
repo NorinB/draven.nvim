@@ -15,6 +15,7 @@ local M = {}
 ---@class draven.Review
 ---@field tabpage integer
 ---@field panel_win integer
+---@field header_win integer
 ---@field view_win integer
 ---@field panel draven.Panel
 ---@field view draven.View
@@ -134,11 +135,72 @@ local function hunk_line(hunk)
 	return first == 0 and math.max(1, hunk.new_start) or first
 end
 
+---The header's status line doubles as the rule under it; with a global status
+---line the window separator takes that place instead.
+local HEADER_WINHL = table.concat({
+	"StatusLine:DravenPanelRule",
+	"StatusLineNC:DravenPanelRule",
+	"WinSeparator:DravenPanelRule",
+}, ",")
+
+---@param win integer
+local function apply_header_window_options(win)
+	pcall(vim.api.nvim_win_set_config, win, { focusable = false })
+
+	local wo = vim.wo[win]
+	wo.winfixheight = true
+	wo.winfixwidth = true
+	wo.number = false
+	wo.relativenumber = false
+	wo.signcolumn = "no"
+	wo.foldcolumn = "0"
+	wo.cursorline = false
+	wo.wrap = false
+	wo.foldenable = false
+	wo.list = false
+	wo.spell = false
+	wo.winbar = ""
+	wo.statusline = " "
+	wo.fillchars = "stl:─,stlnc:─,eob: "
+	wo.winhighlight = HEADER_WINHL
+end
+
+---Keep the header pinned above the list at exactly the height it needs. It is
+---reopened whenever it has gone missing, so a stray `:close` heals itself.
+local function sync_header()
+	if not vim.api.nvim_win_is_valid(active.panel_win) then
+		return
+	end
+
+	local height = math.max(1, active.panel.header_height)
+
+	if not vim.api.nvim_win_is_valid(active.header_win) then
+		active.header_win = vim.api.nvim_open_win(active.panel.header_bufnr, false, {
+			split = "above",
+			win = active.panel_win,
+			height = height,
+		})
+		apply_header_window_options(active.header_win)
+	end
+
+	if vim.api.nvim_win_get_height(active.header_win) ~= height then
+		vim.api.nvim_win_set_height(active.header_win, height)
+	end
+end
+
+local function close_header()
+	if vim.api.nvim_win_is_valid(active.header_win) then
+		pcall(vim.api.nvim_win_close, active.header_win, true)
+	end
+	active.header_win = -1
+end
+
 local function repaint_panel()
 	if not active then
 		return
 	end
 	active.panel:render(active.session, active.view.file and active.view.file.path)
+	sync_header()
 end
 
 ---Put the panel cursor on the file the diff window is showing.
@@ -713,6 +775,7 @@ function M.toggle_panel()
 
 	if vim.api.nvim_win_is_valid(active.panel_win) then
 		active.panel_width = vim.api.nvim_win_get_width(active.panel_win)
+		close_header()
 		vim.api.nvim_win_close(active.panel_win, true)
 		active.panel_win = -1
 		focus_view()
@@ -799,8 +862,10 @@ local function teardown(review)
 		render.clear(bufnr)
 	end
 
-	if vim.api.nvim_buf_is_valid(review.panel.bufnr) then
-		pcall(vim.api.nvim_buf_delete, review.panel.bufnr, { force = true })
+	for _, bufnr in ipairs({ review.panel.bufnr, review.panel.header_bufnr }) do
+		if vim.api.nvim_buf_is_valid(bufnr) then
+			pcall(vim.api.nvim_buf_delete, bufnr, { force = true })
+		end
 	end
 
 	pcall(vim.api.nvim_del_augroup_by_name, "draven.review")
@@ -862,6 +927,7 @@ local function build_layout(session)
 	return {
 		tabpage = tabpage,
 		panel_win = panel_win,
+		header_win = -1,
 		view_win = view_win,
 		panel = panel,
 		view = view_mod.new(view_win, session),
@@ -882,6 +948,36 @@ local function install_autocmds()
 				active = nil
 				teardown(review)
 			end
+		end,
+	})
+
+	vim.api.nvim_create_autocmd("WinEnter", {
+		group = group,
+		desc = "Pass focus from the panel header on to the panel",
+		callback = function()
+			if
+				active
+				and vim.api.nvim_get_current_win() == active.header_win
+				and vim.api.nvim_win_is_valid(active.panel_win)
+			then
+				vim.api.nvim_set_current_win(active.panel_win)
+			end
+		end,
+	})
+
+	vim.api.nvim_create_autocmd("WinClosed", {
+		group = group,
+		desc = "Close the panel header along with the panel",
+		callback = function(args)
+			if not active or tonumber(args.match) ~= active.panel_win then
+				return
+			end
+			local header = active.header_win
+			vim.schedule(function()
+				if vim.api.nvim_win_is_valid(header) then
+					pcall(vim.api.nvim_win_close, header, true)
+				end
+			end)
 		end,
 	})
 
