@@ -152,6 +152,8 @@ closes. Set any of them to `false` in your config to skip it
 			This is the key you will spend the most time on.
 			In the panel, marks the whole file.
 	<leader>ru	Unmark the hunk.
+			`toggle_hunk`, unmapped by default, does either:
+			it marks an unread hunk and unmarks a read one.
 
 	<leader>rn	Next hunk that still needs reading, across files.
 	<leader>rp	Previous one.

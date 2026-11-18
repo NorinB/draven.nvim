@@ -818,6 +818,79 @@ describe("review surface", function()
 		assert.equals(view_win, vim.api.nvim_get_current_win())
 	end)
 
+	it("toggles a hunk between read and unread", function()
+		open_review()
+		local _, _, view_win, header_buf = windows()
+
+		local function progress()
+			for _, line in ipairs(vim.api.nvim_buf_get_lines(header_buf, 0, -1, false)) do
+				if line:find("▰") or line:find("▱") then
+					return line
+				end
+			end
+			return ""
+		end
+
+		local function position()
+			local name = vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(view_win))
+			return name .. ":" .. vim.api.nvim_win_get_cursor(view_win)[1]
+		end
+
+		vim.api.nvim_set_current_win(view_win)
+		vim.api.nvim_win_set_cursor(view_win, { 1, 0 })
+		ui.goto_adjacent_hunk(false)
+		local first_stop = position()
+
+		ui.toggle_hunk()
+		vim.wait(300)
+		assert.is_truthy(progress():match("1/%d+"), "got: " .. progress())
+		assert.are_not.equals(first_stop, position())
+
+		ui.goto_adjacent_hunk(true)
+		helpers.wait_for(function()
+			return position() == first_stop
+		end, "the step back to the marked hunk")
+
+		ui.toggle_hunk()
+		vim.wait(300)
+		assert.is_truthy(progress():match("0/%d+"), "got: " .. progress())
+		assert.equals(first_stop, position())
+	end)
+
+	it("toggles a whole file from the panel", function()
+		open_review()
+		local panel_buf, _, _, header_buf = windows()
+
+		local function header()
+			return table.concat(vim.api.nvim_buf_get_lines(header_buf, 0, -1, false), "\n")
+		end
+
+		ui.focus_panel()
+		local panel_win = vim.api.nvim_get_current_win()
+		for lnum, line in ipairs(vim.api.nvim_buf_get_lines(panel_buf, 0, -1, false)) do
+			if line:find("query.go", 1, true) then
+				vim.api.nvim_win_set_cursor(panel_win, { lnum, 0 })
+				break
+			end
+		end
+
+		ui.toggle_hunk()
+		vim.wait(300)
+		assert.is_truthy(header():match("1/%d+"), "got: " .. header())
+
+		ui.focus_panel()
+		for lnum, line in ipairs(vim.api.nvim_buf_get_lines(panel_buf, 0, -1, false)) do
+			if line:find("query.go", 1, true) then
+				vim.api.nvim_win_set_cursor(panel_win, { lnum, 0 })
+				break
+			end
+		end
+
+		ui.toggle_hunk()
+		vim.wait(300)
+		assert.is_truthy(header():match("0/%d+"), "got: " .. header())
+	end)
+
 	it("marks a whole file from the panel", function()
 		open_review()
 		local _, _, _, header_buf = windows()

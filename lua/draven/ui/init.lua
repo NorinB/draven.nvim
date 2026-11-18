@@ -360,6 +360,31 @@ function M.mark_hunk(reviewed)
 	end
 end
 
+---Mark the hunk read, or unmark it when it already is. In the panel, the
+---same for the whole file under the cursor.
+function M.toggle_hunk()
+	if not active then
+		return
+	end
+
+	if vim.api.nvim_get_current_win() == active.panel_win then
+		local file = current_file()
+		if not file then
+			log.info("no file here")
+			return
+		end
+		return M.mark_file(active.session:file_state(file) ~= "reviewed")
+	end
+
+	local hunk = active.view:hunk_at_cursor()
+	if not hunk then
+		log.info("no hunk here")
+		return
+	end
+
+	M.mark_hunk(not active.session:is_reviewed(hunk))
+end
+
 ---@param reviewed boolean
 function M.mark_file(reviewed)
 	if not active then
@@ -1065,6 +1090,10 @@ actions = {
 		fn = function()
 			M.mark_hunk(false)
 		end,
+	},
+	toggle_hunk = {
+		desc = "[R]eview toggle hunk read",
+		fn = M.toggle_hunk,
 	},
 	mark_file = {
 		desc = "[R]eview mark [F]ile read",

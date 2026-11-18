@@ -123,6 +123,7 @@ The following actions have no default mapping, but can be enabled the same way:
 
 | Action | Does |
 | --- | --- |
+| `toggle_hunk` | mark the hunk read, or unmark it when it already is; in the panel, the whole file |
 | `mark_file` / `mark_all` | mark the current file / entire review read |
 | `next_stale` | jump to the next stale hunk |
 | `next_file` / `prev_file` | move between files |
