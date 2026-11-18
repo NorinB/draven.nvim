@@ -891,6 +891,55 @@ describe("review surface", function()
 		assert.is_truthy(header():match("0/%d+"), "got: " .. header())
 	end)
 
+	---@param view_win integer
+	---@param path string
+	local function wait_for_file(view_win, path)
+		helpers.wait_for(function()
+			local name = vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(view_win))
+			return name:sub(-#path) == path
+		end, path)
+	end
+
+	it("steps through files and wraps around", function()
+		open_review()
+		local _, _, view_win = windows()
+		wait_for_file(view_win, "auth/token.go")
+
+		ui.goto_file(false)
+		wait_for_file(view_win, "db/new.go")
+		ui.goto_file(false)
+		wait_for_file(view_win, "db/query.go")
+		ui.goto_file(false)
+		wait_for_file(view_win, "auth/token.go")
+		ui.goto_file(true)
+		wait_for_file(view_win, "db/query.go")
+	end)
+
+	it("lands on the first hunk of the next file", function()
+		open_review()
+		local _, _, view_win = windows()
+		wait_for_file(view_win, "auth/token.go")
+
+		ui.goto_file(false)
+		wait_for_file(view_win, "db/new.go")
+		helpers.wait_for(function()
+			return vim.api.nvim_win_get_cursor(view_win)[1] == 1
+		end, "the cursor on the first hunk")
+		assert.equals(view_win, vim.api.nvim_get_current_win())
+	end)
+
+	it("skips ignored files when stepping through files", function()
+		repo:write("yarn.lock", { "lock" })
+		open_review()
+		local _, _, view_win = windows()
+		wait_for_file(view_win, "auth/token.go")
+
+		ui.goto_file(true)
+		wait_for_file(view_win, "db/query.go")
+		ui.goto_file(false)
+		wait_for_file(view_win, "auth/token.go")
+	end)
+
 	it("marks a whole file from the panel", function()
 		open_review()
 		local _, _, _, header_buf = windows()

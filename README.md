@@ -103,6 +103,8 @@ These are all buffer-local to the review:
 | `<leader>rp` | `prev_hunk` | jump to the previous unread hunk, across files |
 | `<leader>rN` | `next_any_hunk` | jump to the next hunk, read or not, across files |
 | `<leader>rP` | `prev_any_hunk` | jump to the previous hunk, read or not, across files |
+| `<leader>rf` | `next_file` | jump to the next file |
+| `<leader>rF` | `prev_file` | jump to the previous file |
 | `<leader>rd` | `delta` | show what changed in a stale hunk since you approved it |
 | `<leader>rc` | `comment` | write a finding on this line or a visual selection; edit the one here |
 | `<leader>rt` | `toggle_resolved` | toggle the finding resolved |
@@ -126,7 +128,6 @@ The following actions have no default mapping, but can be enabled the same way:
 | `toggle_hunk` | mark the hunk read, or unmark it when it already is; in the panel, the whole file |
 | `mark_file` / `mark_all` | mark the current file / entire review read |
 | `next_stale` | jump to the next stale hunk |
-| `next_file` / `prev_file` | move between files |
 | `toggle_fold` | toggle unchanged-code folds |
 | `focus_panel` | focus the changeset panel |
 | `quit` | close the review and save |

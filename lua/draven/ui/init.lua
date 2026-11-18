@@ -693,16 +693,24 @@ function M.goto_file(backwards)
 		return
 	end
 
-	local files = active.session.changeset.files
+	local files = vim.tbl_filter(function(f)
+		return not f.ignored
+	end, active.session.changeset.files)
 	if #files == 0 then
+		log.info("no files in this review")
 		return
 	end
 
-	local index = 1
-	if active.view.file then
+	-- From an ignored file, the slot it would sort into decides where to go.
+	local current = active.view.file and active.view.file.path
+	local index = backwards and #files + 1 or 0
+	if current then
 		for i, f in ipairs(files) do
-			if f.path == active.view.file.path then
+			if f.path == current then
 				index = i
+				break
+			elseif f.path > current then
+				index = backwards and i or i - 1
 				break
 			end
 		end

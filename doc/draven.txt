@@ -159,6 +159,8 @@ closes. Set any of them to `false` in your config to skip it
 	<leader>rp	Previous one.
 	<leader>rN	Next hunk, read or not, across files.
 	<leader>rP	Previous one.
+	<leader>rf	Next file, landing on its first hunk.
+	<leader>rF	Previous one.
 
 	<leader>rd	On a stale hunk: what changed since you approved it.
 			See |draven-states|.
